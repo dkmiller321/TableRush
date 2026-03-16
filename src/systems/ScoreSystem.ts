@@ -13,7 +13,7 @@ export class ScoreSystem {
   constructor(gameEvents: Phaser.Events.EventEmitter) {
     this._gameEvents = gameEvents;
 
-    this._gameEvents.on(EVENTS.ORDER_COMPLETED, this._onOrderCompleted, this);
+    this._gameEvents.on(EVENTS.ORDER_SCORE, this._onOrderScore, this);
     this._gameEvents.on(EVENTS.ORDER_FAILED, this._onOrderFailed, this);
     this._gameEvents.on(EVENTS.CUSTOMER_LEFT, this._onCustomerLeft, this);
   }
@@ -25,14 +25,14 @@ export class ScoreSystem {
   get ordersFailed(): number { return this._ordersFailed; }
   get totalTips(): number { return this._totalTips; }
 
-  private _onOrderCompleted(data: { orderId: number; x: number; y: number }): void {
+  private _onOrderScore(data: { patienceRatio: number; baseScore: number; x: number; y: number }): void {
     this._combo++;
     this._comboMultiplier = Math.min(
       1.0 + (this._combo - 1) * BALANCE.COMBO_MULTIPLIER_INCREMENT,
       BALANCE.MAX_COMBO_MULTIPLIER,
     );
 
-    const tip = Math.round(BALANCE.BASE_TIP * this._comboMultiplier);
+    const tip = Math.round(data.baseScore * data.patienceRatio * this._comboMultiplier);
     this._score += tip;
     this._totalTips += tip;
     this._ordersCompleted++;
@@ -80,7 +80,7 @@ export class ScoreSystem {
   }
 
   destroy(): void {
-    this._gameEvents.off(EVENTS.ORDER_COMPLETED, this._onOrderCompleted, this);
+    this._gameEvents.off(EVENTS.ORDER_SCORE, this._onOrderScore, this);
     this._gameEvents.off(EVENTS.ORDER_FAILED, this._onOrderFailed, this);
     this._gameEvents.off(EVENTS.CUSTOMER_LEFT, this._onCustomerLeft, this);
   }

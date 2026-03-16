@@ -18,6 +18,7 @@ export class CookStation extends WorkStation {
   private _isBurned: boolean = false;
   private _burnWarned: boolean = false;
   private _outputType: ItemType | null = null;
+  private _steamEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(
@@ -49,6 +50,7 @@ export class CookStation extends WorkStation {
       this._outputType = COOK_MAP[heldItem.type] ?? null;
       this._showProgressBar();
       this._showItemIndicator(heldItem.color);
+      this._startSteamParticles();
       return null;
     }
 
@@ -66,6 +68,7 @@ export class CookStation extends WorkStation {
       this._burnWarned = true;
       this._bg.fillColor = 0xff6600;
       this._label.setText('!!');
+      this._setSmokeParticles();
       this.scene.game.events.emit(EVENTS.STATION_BURN_WARNING, this);
     }
 
@@ -97,5 +100,39 @@ export class CookStation extends WorkStation {
     this._bg.fillColor = COLORS.COOK_STATION;
     this._hideProgressBar();
     this._hideItemIndicator();
+    this._stopParticles();
+  }
+
+  private _startSteamParticles(): void {
+    this._stopParticles();
+    this._steamEmitter = this.scene.add.particles(this.x, this.y - 10, '__DEFAULT', {
+      speed: { min: 8, max: 20 },
+      angle: { min: 250, max: 290 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 0.5, end: 0 },
+      lifespan: 800,
+      frequency: 120,
+      tint: [0xcccccc, 0xdddddd, 0xeeeeee],
+    });
+  }
+
+  private _setSmokeParticles(): void {
+    this._stopParticles();
+    this._steamEmitter = this.scene.add.particles(this.x, this.y - 10, '__DEFAULT', {
+      speed: { min: 15, max: 40 },
+      angle: { min: 240, max: 300 },
+      scale: { start: 2.5, end: 0 },
+      alpha: { start: 0.7, end: 0 },
+      lifespan: 600,
+      frequency: 60,
+      tint: [0xff4400, 0xff6600, 0xcc3300],
+    });
+  }
+
+  private _stopParticles(): void {
+    if (this._steamEmitter) {
+      this._steamEmitter.destroy();
+      this._steamEmitter = null;
+    }
   }
 }

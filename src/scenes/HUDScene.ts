@@ -2,14 +2,15 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, EVENTS, COLORS } from '../config';
 import { OrderTicket } from '../types/OrderState';
 import { ScoreEvent } from '../types/OrderState';
+import { OrderBoard } from '../ui/OrderBoard';
+import { ScoreDisplay } from '../ui/ScoreDisplay';
+import { TipPopup } from '../ui/TipPopup';
 
 export class HUDScene extends Phaser.Scene {
-  private _scoreText!: Phaser.GameObjects.Text;
   private _timerText!: Phaser.GameObjects.Text;
-  private _comboText!: Phaser.GameObjects.Text;
   private _levelText!: Phaser.GameObjects.Text;
-  private _orderTexts: Phaser.GameObjects.Text[] = [];
-  private _orderBg!: Phaser.GameObjects.Rectangle;
+  private _orderBoard!: OrderBoard;
+  private _scoreDisplay!: ScoreDisplay;
   private _serviceTimeMs: number = 0;
 
   constructor() {
@@ -35,19 +36,10 @@ export class HUDScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5, 0);
 
-    this._scoreText = this.add.text(GAME_WIDTH - 10, 5, 'Score: 0', {
-      fontSize: '14px',
-      color: '#44ff44',
-    }).setOrigin(1, 0);
-
-    this._comboText = this.add.text(GAME_WIDTH - 10, 22, '', {
-      fontSize: '12px',
-      color: '#ffaa44',
-    }).setOrigin(1, 0);
+    this._scoreDisplay = new ScoreDisplay(this, GAME_WIDTH - 10, 5);
 
     // Order board area
-    this._orderBg = this.add.rectangle(GAME_WIDTH / 2, 50, GAME_WIDTH - 20, 30, 0x000000)
-      .setAlpha(0.4);
+    this._orderBoard = new OrderBoard(this);
 
     // Listen for events
     this.game.events.on(EVENTS.SERVICE_TIMER_UPDATE, this._onTimerUpdate, this);
@@ -70,80 +62,41 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private _onScoreUpdate(score: number): void {
-    this._scoreText.setText(`Score: ${score}`);
+    this._scoreDisplay.updateScore(score);
   }
 
   private _onComboUpdate(combo: number): void {
-    if (combo > 1) {
-      this._comboText.setText(`Combo x${combo}!`);
-    } else {
-      this._comboText.setText('');
-    }
+    this._scoreDisplay.updateCombo(combo);
   }
 
   private _onOrderCreated(ticket: OrderTicket): void {
-    const idx = this._orderTexts.length;
-    const text = this.add.text(
-      20 + idx * 160, 40,
-      `#${ticket.id} ${ticket.recipe.name}`,
-      { fontSize: '11px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 4, y: 2 } },
-    );
-    this._orderTexts.push(text);
-    this._resizeOrderBg();
+    this._orderBoard.addOrder(ticket);
   }
 
   private _onOrderCompleted(data: { orderId: number }): void {
-    this._removeOrderText(data.orderId);
+    this._orderBoard.removeOrder(data.orderId);
   }
 
   private _onOrderFailed(ticket: OrderTicket): void {
-    this._removeOrderText(ticket.id);
-  }
-
-  private _removeOrderText(orderId: number): void {
-    const idx = this._orderTexts.findIndex((t) => t.text.startsWith(`#${orderId} `));
-    if (idx >= 0) {
-      this._orderTexts[idx].destroy();
-      this._orderTexts.splice(idx, 1);
-      // Reposition remaining
-      this._orderTexts.forEach((t, i) => {
-        t.x = 20 + i * 160;
-      });
-      this._resizeOrderBg();
-    }
-  }
-
-  private _resizeOrderBg(): void {
-    if (this._orderTexts.length > 0) {
-      this._orderBg.setVisible(true);
-    } else {
-      this._orderBg.setVisible(false);
-    }
+    this._orderBoard.removeOrder(ticket.id);
   }
 
   private _onTipEarned(event: ScoreEvent): void {
-    // Floating tip text in the GameScene coordinate space
-    // We need to create it here but with game scene coordinates
-    const text = this.add.text(event.x, event.y - 30, `+$${event.amount}`, {
-      fontSize: '16px',
-      color: '#44ff44',
-      fontStyle: 'bold',
-    }).setOrigin(0.5);
+    TipPopup.show(this, event.x, event.y, event.amount, event.combo);
 
-    if (event.combo > 1) {
-      this.add.text(event.x, event.y - 14, `x${event.combo} combo!`, {
-        fontSize: '11px',
-        color: '#ffaa44',
-      }).setOrigin(0.5);
-    }
-
-    this.tweens.add({
-      targets: text,
-      y: text.y - 40,
-      alpha: 0,
-      duration: 1500,
-      onComplete: () => text.destroy(),
+    // Sparkle burst at tip position
+    const sparkle = this.add.particles(event.x, event.y - 20, '__DEFAULT', {
+      speed: { min: 30, max: 80 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: 500,
+      tint: [0xffdd44, 0xffaa00, 0xffff88],
+      quantity: 10,
+      emitting: false,
     });
+    sparkle.explode();
+    this.time.delayedCall(600, () => sparkle.destroy());
   }
 
   private _onServiceEnd(): void {

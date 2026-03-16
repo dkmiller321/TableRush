@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { EVENTS } from '../config';
+import { BALANCE, EVENTS } from '../config';
 import { Customer, CustomerState } from '../objects/Customer';
 import { Table, TableState } from '../objects/Table';
 import { OrderSystem } from './OrderSystem';
@@ -99,12 +99,23 @@ export class CustomerSystem {
     });
   }
 
-  private _onOrderCompleted(data: { orderId: number; tableId: number; customerId: number }): void {
+  private _onOrderCompleted(data: { orderId: number; tableId: number; customerId: number; x: number; y: number }): void {
     const customer = this._customers.find((c) => c.customerId === data.customerId);
-    if (customer) {
-      customer.startEating();
-      this._orderSystem.completeOrder(data.orderId);
-    }
+    if (!customer) return;
+
+    const order = this._orderSystem.getOrderById(data.orderId);
+    const patienceRatio = customer.patienceRatio;
+    const baseScore = order?.recipe.baseScore ?? BALANCE.BASE_TIP;
+
+    customer.startEating();
+    this._orderSystem.completeOrder(data.orderId);
+
+    this._gameEvents.emit(EVENTS.ORDER_SCORE, {
+      patienceRatio,
+      baseScore,
+      x: data.x,
+      y: data.y,
+    });
   }
 
   private _onCustomerAngry(data: { customerId: number; tableId: number; state: CustomerState }): void {

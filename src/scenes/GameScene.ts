@@ -27,6 +27,13 @@ export class GameScene extends Phaser.Scene {
   private _serviceTimer: number = 0;
   private _serviceActive: boolean = false;
 
+  // Tutorial state
+  private _tutorialShown: Set<string> = new Set();
+  private _tutorialBg: Phaser.GameObjects.Rectangle | null = null;
+  private _tutorialText: Phaser.GameObjects.Text | null = null;
+  private _tutorialDismissTimer: Phaser.Time.TimerEvent | null = null;
+  private _tutorialKeyListener: (() => void) | null = null;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -92,18 +99,43 @@ export class GameScene extends Phaser.Scene {
     this._serviceTimer = this._levelConfig.serviceTimeMs;
     this._serviceActive = true;
 
-    // Draw host stand marker
-    this.add.rectangle(hostStandX, hostStandY, TILE_SIZE * 2, TILE_SIZE, 0x664488)
-      .setStrokeStyle(2, 0x8866aa);
-    this.add.text(hostStandX, hostStandY, 'HOST', {
-      fontSize: '10px', color: '#ffffff',
+    // Draw host stand marker — a distinct podium shape
+    const standW = TILE_SIZE * 2;
+    const standH = TILE_SIZE * 1.2;
+    this.add.rectangle(hostStandX, hostStandY, standW, standH, 0x553377)
+      .setStrokeStyle(3, 0x8866aa);
+    // Small top ledge
+    this.add.rectangle(hostStandX, hostStandY - standH / 2 - 3, standW + 8, 6, 0x7744aa)
+      .setStrokeStyle(1, 0x9966cc);
+    this.add.text(hostStandX, hostStandY - 5, 'HOST', {
+      fontSize: '10px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.add.text(hostStandX, hostStandY + 8, 'WAIT HERE', {
+      fontSize: '7px', color: '#ccbbee',
     }).setOrigin(0.5);
 
-    // Draw divider line between kitchen and dining
+    // Draw wall divider between kitchen and dining with service window gap
     const dividerX = GAME_WIDTH * 0.42;
-    this.add.rectangle(dividerX, GAME_HEIGHT / 2, 4, GAME_HEIGHT, 0x666666);
-    this.add.text(dividerX, 15, 'SERVICE WINDOW', {
-      fontSize: '8px', color: '#999999',
+    const wallThickness = 10;
+    const gapHeight = TILE_SIZE * 3; // 3-tile-wide opening
+    const gapCenterY = GAME_HEIGHT / 2;
+    const upperWallHeight = gapCenterY - gapHeight / 2;
+    const lowerWallTop = gapCenterY + gapHeight / 2;
+    const lowerWallHeight = GAME_HEIGHT - lowerWallTop;
+
+    // Upper wall segment
+    this.add.rectangle(dividerX, upperWallHeight / 2, wallThickness, upperWallHeight, 0x444444)
+      .setStrokeStyle(1, 0x555555);
+    // Lower wall segment
+    this.add.rectangle(dividerX, lowerWallTop + lowerWallHeight / 2, wallThickness, lowerWallHeight, 0x444444)
+      .setStrokeStyle(1, 0x555555);
+    // Gap frame top edge
+    this.add.rectangle(dividerX, gapCenterY - gapHeight / 2, wallThickness + 8, 4, 0x888888);
+    // Gap frame bottom edge
+    this.add.rectangle(dividerX, gapCenterY + gapHeight / 2, wallThickness + 8, 4, 0x888888);
+    // Service window label
+    this.add.text(dividerX, gapCenterY - gapHeight / 2 - 10, 'SERVICE WINDOW', {
+      fontSize: '8px', color: '#aaaaaa', fontStyle: 'bold',
     }).setOrigin(0.5);
 
     // Launch HUD
@@ -114,6 +146,11 @@ export class GameScene extends Phaser.Scene {
 
     // Set world bounds
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Tutorial prompts for Level 1
+    if (this._levelConfig.level === 1) {
+      this._setupTutorial();
+    }
   }
 
   update(time: number, delta: number): void {
@@ -221,6 +258,84 @@ export class GameScene extends Phaser.Scene {
         tp.seats,
       );
       this._tables.push(table);
+    }
+  }
+
+  private _setupTutorial(): void {
+    // Initial movement prompt after 1 second
+    this.time.delayedCall(1000, () => {
+      this._showTutorial('move', 'Use WASD to move. Approach stations and press SPACE to interact.');
+    });
+
+    // After first customer is seated
+    this.game.events.on(EVENTS.CUSTOMER_SEATED, () => {
+      this._showTutorial('seated', 'A customer is seated! Pick up ingredients from the shelves on the right.');
+    });
+
+    // After first order is created
+    this.game.events.on(EVENTS.ORDER_CREATED, () => {
+      this._showTutorial('order', 'Check the order at the top. Chop and cook ingredients, then plate them!');
+    });
+
+    // After first order is completed
+    this.game.events.on(EVENTS.ORDER_COMPLETED, () => {
+      this._showTutorial('completed', 'Great job! Keep serving customers before the timer runs out!');
+    });
+  }
+
+  private _showTutorial(key: string, text: string): void {
+    if (this._tutorialShown.has(key)) return;
+    this._tutorialShown.add(key);
+
+    // Dismiss any existing tutorial prompt first
+    this._dismissTutorial();
+
+    const padding = 16;
+    const bgWidth = GAME_WIDTH - 80;
+    const bgHeight = 48;
+    const bgX = GAME_WIDTH / 2;
+    const bgY = GAME_HEIGHT - 50;
+
+    this._tutorialBg = this.add.rectangle(bgX, bgY, bgWidth, bgHeight, 0x000000)
+      .setAlpha(0.75)
+      .setDepth(1000);
+
+    this._tutorialText = this.add.text(bgX, bgY, text, {
+      fontSize: '14px',
+      color: '#ffffff',
+      align: 'center',
+      wordWrap: { width: bgWidth - padding * 2 },
+    }).setOrigin(0.5).setDepth(1001);
+
+    // Auto-dismiss after 5 seconds
+    this._tutorialDismissTimer = this.time.delayedCall(5000, () => {
+      this._dismissTutorial();
+    });
+
+    // Dismiss on any key press
+    const dismiss = (): void => {
+      this._dismissTutorial();
+    };
+    this._tutorialKeyListener = dismiss;
+    this.input.keyboard?.once('keydown', dismiss);
+  }
+
+  private _dismissTutorial(): void {
+    if (this._tutorialBg) {
+      this._tutorialBg.destroy();
+      this._tutorialBg = null;
+    }
+    if (this._tutorialText) {
+      this._tutorialText.destroy();
+      this._tutorialText = null;
+    }
+    if (this._tutorialDismissTimer) {
+      this._tutorialDismissTimer.destroy();
+      this._tutorialDismissTimer = null;
+    }
+    if (this._tutorialKeyListener) {
+      this.input.keyboard?.off('keydown', this._tutorialKeyListener);
+      this._tutorialKeyListener = null;
     }
   }
 

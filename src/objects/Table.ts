@@ -33,6 +33,9 @@ export class Table extends Phaser.GameObjects.Container {
     this._bg.setStrokeStyle(2, 0x886644);
     this.add(this._bg);
 
+    // Draw chair indicators around the table
+    this._drawChairs(scene, size, seats);
+
     this._stateLabel = scene.add.text(0, 0, '', {
       fontSize: '10px',
       color: '#ffffff',
@@ -112,6 +115,34 @@ export class Table extends Phaser.GameObjects.Container {
 
   forceEmpty(): void {
     this._clearTable();
+  }
+
+  private _drawChairs(scene: Phaser.Scene, tableSize: number, seats: 2 | 4): void {
+    const chairSize = 12;
+    const chairColor = 0x997755;
+    const offset = tableSize / 2 + chairSize / 2 + 2;
+
+    // Left chair
+    const leftChair = scene.add.rectangle(-offset, 0, chairSize, chairSize, chairColor);
+    leftChair.setStrokeStyle(1, 0xbbaa88);
+    this.add(leftChair);
+
+    // Right chair
+    const rightChair = scene.add.rectangle(offset, 0, chairSize, chairSize, chairColor);
+    rightChair.setStrokeStyle(1, 0xbbaa88);
+    this.add(rightChair);
+
+    if (seats === 4) {
+      // Top chair
+      const topChair = scene.add.rectangle(0, -offset, chairSize, chairSize, chairColor);
+      topChair.setStrokeStyle(1, 0xbbaa88);
+      this.add(topChair);
+
+      // Bottom chair
+      const bottomChair = scene.add.rectangle(0, offset, chairSize, chairSize, chairColor);
+      bottomChair.setStrokeStyle(1, 0xbbaa88);
+      this.add(bottomChair);
+    }
   }
 
   private _clearTable(): void {

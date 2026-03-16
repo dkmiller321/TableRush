@@ -27,6 +27,7 @@ export const EVENTS = {
   STATION_BURNED: 'station:burned',
   TABLE_CLEARED: 'table:cleared',
   TIP_EARNED: 'tip:earned',
+  ORDER_SCORE: 'order:score',
 } as const;
 
 export const BALANCE = {
